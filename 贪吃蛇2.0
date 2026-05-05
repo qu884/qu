@@ -1,0 +1,158 @@
+#include <QApplication>
+#include <QMainWindow>
+#include <QTimer>
+#include <QKeyEvent>
+#include <QPainter>
+#include <QVector>
+#include <QPoint>
+#include <stdlib.h>
+
+class SnakeGame : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    SnakeGame(QWidget *parent = nullptr)
+        : QMainWindow(parent), direction(1), gameOver(false), paused(false), score(0)
+    {
+        setWindowTitle("贪吃蛇游戏");
+        setFixedSize(cols * gridSize, rows * gridSize);
+        timer = new QTimer(this);
+        connect(timer, &QTimer::timeout, this, &SnakeGame::updateGame);
+        initGame();
+    }
+
+    ~SnakeGame() { delete timer; }
+
+private slots:
+    void updateGame()
+    {
+        if (!gameOver && !paused) {
+            moveSnake();
+            if (checkCollision()) {
+                gameOver = true;
+                timer->stop();
+            } else if (snake.first() == food) {
+                score += 10;
+                snake.append(snake.last());
+                generateFood();
+            }
+        }
+        repaint();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event)
+    {
+        Q_UNUSED(event);
+        QPainter painter(this);
+        painter.fillRect(rect(), Qt::black);
+        for (const QPoint &point : snake) {
+            painter.fillRect(point.x() * gridSize, point.y() * gridSize, gridSize - 1, gridSize - 1, Qt::green);
+        }
+        painter.fillRect(food.x() * gridSize, food.y() * gridSize, gridSize - 1, gridSize - 1, Qt::red);
+        if (gameOver) {
+            painter.setPen(Qt::white);
+            painter.setFont(QFont("Arial", 20));
+            painter.drawText(rect(), Qt::AlignCenter, QString("游戏结束!\n分数: %1\n按空格重新开始").arg(score));
+        } else if (paused) {
+            painter.setPen(Qt::white);
+            painter.setFont(QFont("Arial", 20));
+            painter.drawText(rect(), Qt::AlignCenter, "暂停\n按空格继续");
+        }
+    }
+
+    void keyPressEvent(QKeyEvent *event)
+    {
+        switch (event->key()) {
+        case Qt::Key_Up:
+            if (direction != 2) direction = 0;
+            break;
+        case Qt::Key_Right:
+            if (direction != 3) direction = 1;
+            break;
+        case Qt::Key_Down:
+            if (direction != 0) direction = 2;
+            break;
+        case Qt::Key_Left:
+            if (direction != 1) direction = 3;
+            break;
+        case Qt::Key_Space:
+            if (gameOver) initGame();
+            else paused = !paused;
+            break;
+        case Qt::Key_Escape:
+            close();
+            break;
+        }
+    }
+
+private:
+    void initGame()
+    {
+        snake.clear();
+        snake.append(QPoint(cols / 2, rows / 2));
+        snake.append(QPoint(cols / 2 - 1, rows / 2));
+        snake.append(QPoint(cols / 2 - 2, rows / 2));
+        direction = 1;
+        gameOver = false;
+        paused = false;
+        score = 0;
+        generateFood();
+        timer->start(150);
+    }
+
+    void generateFood()
+    {
+        int x, y;
+        do {
+            x = rand() % cols;
+            y = rand() % rows;
+        } while (snake.contains(QPoint(x, y)));
+        food = QPoint(x, y);
+    }
+
+    void moveSnake()
+    {
+        QPoint head = snake.first();
+        switch (direction) {
+        case 0: head.ry()--; break;
+        case 1: head.rx()++; break;
+        case 2: head.ry()++; break;
+        case 3: head.rx()--; break;
+        }
+        snake.prepend(head);
+        snake.removeLast();
+    }
+
+    bool checkCollision()
+    {
+        QPoint head = snake.first();
+        if (head.x() < 0 || head.x() >= cols || head.y() < 0 || head.y() >= rows) return true;
+        for (int i = 1; i < snake.size(); i++) {
+            if (snake[i] == head) return true;
+        }
+        return false;
+    }
+
+    QTimer *timer;
+    QVector<QPoint> snake;
+    QPoint food;
+    int direction;
+    bool gameOver;
+    bool paused;
+    int score;
+    const int gridSize = 20;
+    const int rows = 20;
+    const int cols = 20;
+};
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+    SnakeGame w;
+    w.show();
+    return a.exec();
+}
+
+#include "main.moc"
