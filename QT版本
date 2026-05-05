@@ -1,0 +1,430 @@
+#ifndef GAMEWINDOW_H
+#define GAMEWINDOW_H
+
+#include <QMainWindow>
+#include <QTimer>
+#include <QKeyEvent>
+#include <QVector>
+#include <QPoint>
+#include <QString>
+#include <QFile>
+#include <QTextStream>
+#include <QPainter>
+#include <QMessageBox>
+#include <QInputDialog>
+#include <QLineEdit>
+
+class GameWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    explicit GameWindow(QWidget *parent = nullptr);
+    ~GameWindow();
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+
+private slots:
+    void gameLoop();
+    void startGame();
+    void pauseGame();
+    void resetGame();
+    void showQuiz();
+
+private:
+    static const int gridSize = 20;
+    static const int tileCount = 20;
+    static const int canvasSize = 400;
+
+    QVector<QPoint> snake;
+    QPoint food;
+    QVector<QPoint> candies;
+    QString direction;
+    QString nextDirection;
+
+    int score;
+    int highScore;
+    bool isGameOver;
+    bool isPaused;
+    bool isQuizActive;
+    int quizTimer;
+
+    QTimer *gameTimer;
+    QTimer *quizTimerObj;
+
+    struct Quiz {
+        QString question;
+        int answer;
+    };
+    QVector<Quiz> quizzes;
+    Quiz currentQuiz;
+
+    void generateFood();
+    void generateCandies(int count);
+    void gameOver();
+    void loadHighScore();
+    void saveHighScore();
+    void drawSnake(QPainter &painter);
+    void drawFood(QPainter &painter);
+    void drawCandies(QPainter &painter);
+    void drawGameOver(QPainter &painter);
+    void drawPaused(QPainter &painter);
+};
+
+GameWindow::GameWindow(QWidget *parent)
+    : QMainWindow(parent)
+    , score(0)
+    , highScore(0)
+    , isGameOver(false)
+    , isPaused(false)
+    , isQuizActive(false)
+    , quizTimer(30)
+{
+    setFixedSize(canvasSize + 50, canvasSize + 100);
+    setWindowTitle("贪吃蛇游戏");
+    setStyleSheet("background-color: #f0f0f0;");
+
+    snake.append(QPoint(10, 10));
+    snake.append(QPoint(9, 10));
+    snake.append(QPoint(8, 10));
+
+    loadHighScore();
+
+    gameTimer = new QTimer(this);
+    connect(gameTimer, &QTimer::timeout, this, &GameWindow::gameLoop);
+
+    quizTimerObj = new QTimer(this);
+    connect(quizTimerObj, &QTimer::timeout, this, &GameWindow::showQuiz);
+
+    quizzes.append({"3 + 5 × 2 = ?", 13});
+    quizzes.append({"一个正方形有几条边？", 4});
+    quizzes.append({"一周有几天？", 7});
+    quizzes.append({"5的平方是多少？", 25});
+    quizzes.append({"20 - 8 ÷ 2 = ?", 16});
+    quizzes.append({"三角形有几个角？", 3});
+    quizzes.append({"一年有几个季节？", 4});
+    quizzes.append({"100 ÷ 4 = ?", 25});
+    quizzes.append({"7 × 8 = ?", 56});
+    quizzes.append({"半小时等于多少分钟？", 30});
+
+    generateFood();
+    update();
+}
+
+GameWindow::~GameWindow()
+{
+    saveHighScore();
+}
+
+void GameWindow::paintEvent(QPaintEvent *event)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    painter.fillRect(25, 50, canvasSize, canvasSize, Qt::black);
+
+    drawCandies(painter);
+    drawSnake(painter);
+    drawFood(painter);
+
+    painter.setPen(Qt::black);
+    painter.setFont(QFont("Arial", 14));
+    painter.drawText(30, 30, QString("分数：%1").arg(score));
+    painter.drawText(150, 30, QString("最高分：%1").arg(highScore));
+    painter.setPen(Qt::red);
+    painter.drawText(300, 30, QString("下次题目：%1秒").arg(quizTimer));
+
+    if (isGameOver) {
+        drawGameOver(painter);
+    }
+
+    if (isPaused && !isGameOver) {
+        drawPaused(painter);
+    }
+}
+
+void GameWindow::drawSnake(QPainter &painter)
+{
+    for (int i = 0; i < snake.size(); ++i) {
+        if (i == 0) {
+            painter.fillRect(25 + snake[i].x() * gridSize,
+                           50 + snake[i].y() * gridSize,
+                           gridSize - 2, gridSize - 2,
+                           QColor(0, 100, 0));
+        } else {
+            painter.fillRect(25 + snake[i].x() * gridSize,
+                           50 + snake[i].y() * gridSize,
+                           gridSize - 2, gridSize - 2,
+                           QColor(0, 255, 0));
+        }
+    }
+}
+
+void GameWindow::drawFood(QPainter &painter)
+{
+    painter.fillRect(25 + food.x() * gridSize,
+                   50 + food.y() * gridSize,
+                   gridSize - 2, gridSize - 2,
+                   Qt::red);
+}
+
+void GameWindow::drawCandies(QPainter &painter)
+{
+    QVector<QColor> colors = {
+        Qt::red, Qt::yellow, Qt::cyan,
+        Qt::green, Qt::magenta, Qt::blue, Qt::white
+    };
+
+    for (int i = 0; i < candies.size(); ++i) {
+        painter.setBrush(colors[i % colors.size()]);
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(
+            QPoint(25 + candies[i].x() * gridSize + gridSize/2,
+                   50 + candies[i].y() * gridSize + gridSize/2),
+            gridSize/3, gridSize/3
+        );
+    }
+}
+
+void GameWindow::drawGameOver(QPainter &painter)
+{
+    painter.setPen(Qt::white);
+    painter.setFont(QFont("Arial", 24));
+    painter.drawText(width()/2 - 60, height()/2 - 20, "游戏结束！");
+    painter.setFont(QFont("Arial", 14));
+    painter.drawText(width()/2 - 100, height()/2 + 20,
+                   "点击\"重新开始\"按钮开始新游戏");
+}
+
+void GameWindow::drawPaused(QPainter &painter)
+{
+    painter.setPen(Qt::white);
+    painter.setFont(QFont("Arial", 24));
+    painter.drawText(width()/2 - 50, height()/2, "游戏暂停");
+}
+
+void GameWindow::keyPressEvent(QKeyEvent *event)
+{
+    switch (event->key()) {
+    case Qt::Key_Up:
+        if (direction != "down") nextDirection = "up";
+        break;
+    case Qt::Key_Down:
+        if (direction != "up") nextDirection = "down";
+        break;
+    case Qt::Key_Left:
+        if (direction != "right") nextDirection = "left";
+        break;
+    case Qt::Key_Right:
+        if (direction != "left") nextDirection = "right";
+        break;
+    case Qt::Key_Space:
+        pauseGame();
+        break;
+    }
+}
+
+void GameWindow::gameLoop()
+{
+    if (isGameOver || isPaused || isQuizActive) return;
+
+    direction = nextDirection;
+
+    QPoint head = snake[0];
+    if (direction == "up") head.ry()--;
+    else if (direction == "down") head.ry()++;
+    else if (direction == "left") head.rx()--;
+    else if (direction == "right") head.rx()++;
+
+    if (head.x() < 0 || head.x() >= tileCount ||
+        head.y() < 0 || head.y() >= tileCount) {
+        gameOver();
+        return;
+    }
+
+    for (int i = 1; i < snake.size(); ++i) {
+        if (head == snake[i]) {
+            gameOver();
+            return;
+        }
+    }
+
+    int candiesEaten = 0;
+    for (int i = candies.size() - 1; i >= 0; --i) {
+        if (head == candies[i]) {
+            score += 5;
+            candiesEaten++;
+            candies.removeAt(i);
+        }
+    }
+
+    for (int i = 0; i < candiesEaten * 2; ++i) {
+        snake.append(snake.last());
+    }
+
+    if (head == food) {
+        score += 10;
+        generateFood();
+    } else {
+        snake.removeLast();
+    }
+
+    snake.prepend(head);
+    update();
+
+    if (score > highScore) {
+        highScore = score;
+        update();
+    }
+}
+
+void GameWindow::generateFood()
+{
+    do {
+        food.setX(qrand() % tileCount);
+        food.setY(qrand() % tileCount);
+    } while (snake.contains(food) || candies.contains(food));
+}
+
+void GameWindow::generateCandies(int count)
+{
+    QVector<QColor> colors = {
+        Qt::red, Qt::yellow, Qt::cyan,
+        Qt::green, Qt::magenta, Qt::blue, Qt::white
+    };
+
+    Q_UNUSED(colors);
+
+    for (int i = 0; i < count; ++i) {
+        QPoint candy;
+        do {
+            candy.setX(qrand() % tileCount);
+            candy.setY(qrand() % tileCount);
+        } while (snake.contains(candy) || candy == food || candies.contains(candy));
+
+        candies.append(candy);
+    }
+}
+
+void GameWindow::showQuiz()
+{
+    if (isGameOver) return;
+
+    quizTimerObj->stop();
+
+    currentQuiz = quizzes[qrand() % quizzes.size()];
+
+    bool ok;
+    QString answer = QInputDialog::getText(this, "益智挑战",
+                                          currentQuiz.question,
+                                          QLineEdit::Normal, "", &ok);
+
+    if (ok && !answer.isEmpty()) {
+        if (answer.toInt() == currentQuiz.answer) {
+            QMessageBox::information(this, "结果", "🎉 答对了！获得10个糖豆！");
+            generateCandies(10);
+        } else {
+            QMessageBox::information(this, "结果",
+                                   QString("😢 答错了！正确答案是 %1").arg(currentQuiz.answer));
+        }
+    }
+
+    quizTimer = 30;
+    quizTimerObj->start(1000);
+    update();
+}
+
+void GameWindow::startGame()
+{
+    if (!isGameOver && !isPaused) return;
+
+    if (isGameOver) {
+        resetGame();
+    }
+
+    isPaused = false;
+    gameTimer->start(1000 / 10);
+
+    if (!quizTimerObj->isActive()) {
+        quizTimerObj->start(1000);
+    }
+}
+
+void GameWindow::pauseGame()
+{
+    if (isGameOver) return;
+
+    isPaused = !isPaused;
+    if (isPaused) {
+        gameTimer->stop();
+    } else {
+        gameTimer->start(1000 / 10);
+    }
+    update();
+}
+
+void GameWindow::resetGame()
+{
+    gameTimer->stop();
+    quizTimerObj->stop();
+
+    snake.clear();
+    snake.append(QPoint(10, 10));
+    snake.append(QPoint(9, 10));
+    snake.append(QPoint(8, 10));
+
+    direction = "right";
+    nextDirection = "right";
+    score = 0;
+    candies.clear();
+    quizTimer = 30;
+    isGameOver = false;
+    isPaused = false;
+    isQuizActive = false;
+
+    generateFood();
+    update();
+
+    startGame();
+}
+
+void GameWindow::gameOver()
+{
+    isGameOver = true;
+    gameTimer->stop();
+    quizTimerObj->stop();
+    saveHighScore();
+    update();
+}
+
+void GameWindow::loadHighScore()
+{
+    QFile file("highscore.txt");
+    if (file.open(QIODevice::ReadOnly)) {
+        QTextStream in(&file);
+        highScore = in.readLine().toInt();
+        file.close();
+    }
+}
+
+void GameWindow::saveHighScore()
+{
+    QFile file("highscore.txt");
+    if (file.open(QIODevice::WriteOnly)) {
+        QTextStream out(&file);
+        out << highScore;
+        file.close();
+    }
+}
+
+#include <QApplication>
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+    GameWindow w;
+    w.show();
+    return a.exec();
+}
