@@ -1,0 +1,522 @@
+#include <QApplication>
+#include <QMainWindow>
+#include <QTimer>
+#include <QKeyEvent>
+#include <QPainter>
+#include <QVector>
+#include <QPoint>
+#include <stdlib.h>
+
+class SnakeGame : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    SnakeGame(QWidget *parent = nullptr)
+        : QMainWindow(parent), direction(1), gameOver(false), paused(false), score(0)
+    {
+        setWindowTitle("贪吃蛇游戏");
+        setFixedSize(cols * gridSize, rows * gridSize);
+        timer = new QTimer(this);
+        connect(timer, &QTimer::timeout, this, &SnakeGame::updateGame);
+        initGame();
+    }
+
+    ~SnakeGame() { delete timer; }
+
+private slots:
+    void updateGame()
+    {
+        if (!gameOver && !paused) {
+            moveSnake();
+            if (checkCollision()) {
+                gameOver = true;
+                timer->stop();
+            } else if (snake.first() == food) {
+                score += 10;
+                snake.append(snake.last());
+                generateFood();
+            }
+        }
+        repaint();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event)
+    {
+        Q_UNUSED(event);
+        QPainter painter(this);
+        painter.fillRect(rect(), Qt::black);
+        for (const QPoint &point : snake) {
+            painter.fillRect(point.x() * gridSize, point.y() * gridSize, gridSize - 1, gridSize - 1, Qt::green);
+        }
+        painter.fillRect(food.x() * gridSize, food.y() * gridSize, gridSize - 1, gridSize - 1, Qt::red);
+        if (gameOver) {
+            painter.setPen(Qt::white);
+            painter.setFont(QFont("Arial", 20));
+            painter.drawText(rect(), Qt::AlignCenter, QString("游戏结束!\n分数: %1\n按空格重新开始").arg(score));
+        } else if (paused) {
+            painter.setPen(Qt::white);
+            painter.setFont(QFont("Arial", 20));
+            painter.drawText(rect(), Qt::AlignCenter, "暂停\n按空格继续");
+        }
+    }
+
+    void keyPressEvent(QKeyEvent *event)
+    {
+        switch (event->key()) {
+        case Qt::Key_Up:
+            if (direction != 2) direction = 0;
+            break;
+        case Qt::Key_Right:
+            if (direction != 3) direction = 1;
+            break;
+        case Qt::Key_Down:
+            if (direction != 0) direction = 2;
+            break;
+        case Qt::Key_Left:
+            if (direction != 1) direction = 3;
+            break;
+        case Qt::Key_Space:
+            if (gameOver) initGame();
+            else paused = !paused;
+            break;
+        case Qt::Key_Escape:
+            close();
+            break;
+        }
+    }
+
+private:
+    void initGame()
+    {
+        snake.clear();
+        snake.append(QPoint(cols / 2, rows / 2));
+        snake.append(QPoint(cols / 2 - 1, rows / 2));
+        snake.append(QPoint(cols / 2 - 2, rows / 2));
+        direction = 1;
+        gameOver = false;
+        paused = false;
+        score = 0;
+        generateFood();
+        timer->start(150);
+    }
+
+    void generateFood()
+    {
+        int x, y;
+        do {
+            x = rand() % cols;
+            y = rand() % rows;
+        } while (snake.contains(QPoint(x, y)));
+        food = QPoint(x, y);
+    }
+
+    void moveSnake()
+    {
+        QPoint head = snake.first();
+        switch (direction) {
+        case 0: head.ry()--; break;
+        case 1: head.rx()++; break;
+        case 2: head.ry()++; break;
+        case 3: head.rx()--; break;
+        }
+        snake.prepend(head);
+        snake.removeLast();
+    }
+
+    bool checkCollision()
+    {
+        QPoint head = snake.first();
+        if (head.x() < 0 || head.x() >= cols || head.y() < 0 || head.y() >= rows) return true;
+        for (int i = 1; i < snake.size(); i++) {
+            if (snake[i] == head) return true;
+        }
+        return false;
+    }
+
+    QTimer *timer;
+    QVector<QPoint> snake;
+    QPoint food;
+    int direction;
+    bool gameOver;
+    bool paused;
+    int score;
+    const int gridSize = 20;
+    const int rows = 20;
+    const int cols = 20;
+};
+
+#include <QString>
+#include <QVector>
+#include <ctime>
+
+class PuzzleGenerator {
+public:
+    enum PuzzleType {
+        MATH_ARITHMETIC,
+        MATH_SEQUENCE,
+        LOGIC_TRUE_FALSE,
+        LOGIC_REASONING,
+        WORD_IDIOM,
+        WORD_RIDDLE,
+        GENERAL_KNOWLEDGE,
+        COUNTING_PUZZLE
+    };
+
+    struct Puzzle {
+        QString question;
+        QString answer;
+        QString options[4];
+        int correctIndex;
+        PuzzleType type;
+        QString hint;
+    };
+
+    PuzzleGenerator() {
+        srand(time(0));
+    }
+
+    Puzzle generatePuzzle(PuzzleType type = MATH_ARITHMETIC) {
+        Puzzle puzzle;
+        puzzle.type = type;
+
+        switch(type) {
+        case MATH_ARITHMETIC:
+            return generateArithmeticPuzzle();
+        case MATH_SEQUENCE:
+            return generateSequencePuzzle();
+        case LOGIC_TRUE_FALSE:
+            return generateTrueFalsePuzzle();
+        case LOGIC_REASONING:
+            return generateReasoningPuzzle();
+        case WORD_IDIOM:
+            return generateIdiomPuzzle();
+        case WORD_RIDDLE:
+            return generateRiddlePuzzle();
+        case GENERAL_KNOWLEDGE:
+            return generateKnowledgePuzzle();
+        case COUNTING_PUZZLE:
+            return generateCountingPuzzle();
+        default:
+            return generateArithmeticPuzzle();
+        }
+    }
+
+    Puzzle generateRandomPuzzle() {
+        int type = rand() % 8;
+        return generatePuzzle(static_cast<PuzzleType>(type));
+    }
+
+    QString getTypeName(PuzzleType type) {
+        switch(type) {
+        case MATH_ARITHMETIC: return "数学运算";
+        case MATH_SEQUENCE: return "数字序列";
+        case LOGIC_TRUE_FALSE: return "逻辑判断";
+        case LOGIC_REASONING: return "逻辑推理";
+        case WORD_IDIOM: return "成语填空";
+        case WORD_RIDDLE: return "字谜";
+        case GENERAL_KNOWLEDGE: return "常识问答";
+        case COUNTING_PUZZLE: return "计数谜题";
+        default: return "未知类型";
+        }
+    }
+
+private:
+    Puzzle generateArithmeticPuzzle() {
+        Puzzle p;
+        int a = rand() % 50 + 1;
+        int b = rand() % 50 + 1;
+        int op = rand() % 4;
+
+        QString ops[] = {"+", "-", "*", "/"};
+        int answer;
+
+        switch(op) {
+        case 0: answer = a + b; break;
+        case 1: 
+            if (a < b) qSwap(a, b);
+            answer = a - b; 
+            break;
+        case 2: answer = a * b; break;
+        case 3: 
+            b = rand() % 10 + 1;
+            answer = a * b;
+            a = answer;
+            break;
+        }
+
+        p.question = QString("%1 %2 %3 = ?").arg(a).arg(ops[op]).arg(b);
+        p.answer = QString::number(answer);
+        
+        generateOptions(p, answer, 0, answer * 2 + 10);
+        p.hint = QString("使用基本%1运算").arg(op == 0 ? "加法" : op == 1 ? "减法" : op == 2 ? "乘法" : "除法");
+        return p;
+    }
+
+    Puzzle generateSequencePuzzle() {
+        Puzzle p;
+        int type = rand() % 5;
+        QString seqStr;
+        int answer;
+
+        switch(type) {
+        case 0: {
+            int a = rand() % 5 + 1;
+            int d = rand() % 5 + 1;
+            seqStr = QString("%1, %2, %3, %4, ?").arg(a).arg(a+d).arg(a+2*d).arg(a+3*d);
+            answer = a + 4 * d;
+            break;
+        }
+        case 1: {
+            int a = rand() % 3 + 1;
+            seqStr = QString("%1, %2, %3, %4, ?").arg(a).arg(a*2).arg(a*4).arg(a*8);
+            answer = a * 16;
+            break;
+        }
+        case 2: {
+            int n = rand() % 5 + 3;
+            seqStr = QString("%1, %2, %3, %4, ?").arg(n*n-1).arg(n*n+1).arg((n+1)*(n+1)-1).arg((n+1)*(n+1)+1);
+            answer = (n+2)*(n+2)-1;
+            break;
+        }
+        case 3: {
+            int a = 1, b = 1;
+            seqStr = "1, 1, ";
+            for(int i=2; i<5; i++) {
+                int c = a + b;
+                seqStr += QString::number(c) + (i < 4 ? ", " : ", ?");
+                a = b; b = c;
+            }
+            answer = a + b;
+            break;
+        }
+        default: {
+            int start = rand() % 10 + 1;
+            seqStr = QString("%1, %2, %3, %4, ?").arg(start).arg(start*2).arg(start*3).arg(start*4);
+            answer = start * 5;
+            break;
+        }
+        }
+
+        p.question = QString("找出数列规律：%1").arg(seqStr);
+        p.answer = QString::number(answer);
+        generateOptions(p, answer, answer-20, answer+20);
+        p.hint = "观察相邻数字之间的关系";
+        return p;
+    }
+
+    Puzzle generateTrueFalsePuzzle() {
+        Puzzle p;
+        struct TFQuestion {
+            QString question;
+            bool answer;
+            QString hint;
+        };
+
+        QVector<TFQuestion> questions = {
+            {"太阳从西边升起", false, "想想每天早上看到的景象"},
+            {"水在标准大气压下100°C会沸腾", true, "基本物理常识"},
+            {"一年有365天", false, "闰年有366天"},
+            {"地球是圆的", true, "宇航员从太空看到的样子"},
+            {"正方形有三条边", false, "数一下正方形的边"},
+            {"人类有两只眼睛", true, "照镜子看看"},
+            {"冰会在高温下融化", true, "夏天的雪糕"},
+            {"月亮会自己发光", false, "月亮是反射太阳光"},
+            {"1米等于100厘米", true, "长度单位换算"},
+            {"鱼可以在陆地上呼吸", false, "鱼用鳃呼吸"},
+            {"中国的首都是北京", true, "国家常识"},
+            {"三角形内角和是180度", true, "几何基本定理"}
+        };
+
+        int idx = rand() % questions.size();
+        p.question = questions[idx].question + "（对/错）";
+        p.answer = questions[idx].answer ? "对" : "错";
+        p.options[0] = "对";
+        p.options[1] = "错";
+        p.options[2] = "不确定";
+        p.options[3] = "以上都不对";
+        p.correctIndex = questions[idx].answer ? 0 : 1;
+        p.hint = questions[idx].hint;
+        return p;
+    }
+
+    Puzzle generateReasoningPuzzle() {
+        Puzzle p;
+        struct ReasoningQuestion {
+            QString question;
+            QString answer;
+            QString hint;
+        };
+
+        QVector<ReasoningQuestion> questions = {
+            {"一个房间里有3个人，每个人都有2只手，总共有几只手？", "6", "3乘以2等于多少"},
+            {"小明有5个苹果，吃掉2个，又买了3个，现在有几个？", "6", "5-2+3"},
+            {"如果昨天是明天，那么今天是星期五。请问今天实际是星期几？", "星期日", "反向推理一下"},
+            {"3个人3天用3桶水，9个人9天用几桶水？", "27", "先算1个人3天用多少水"},
+            {"一个正方形切去一个角，还剩几个角？", "5", "不是简单的4-1"},
+            {"树上有10只鸟，开枪打死1只，还剩几只？", "0", "枪声会吓跑其他鸟"},
+            {"什么东西越洗越脏？", "水", "想想洗衣服的水"},
+            {"什么东西打破了才能用？", "鸡蛋", "早餐常吃的"},
+            {"什么车没有轮子？", "风车", "不是交通工具"},
+            {"什么东西有头无脚？", "砖头", "建筑材料"}
+        };
+
+        int idx = rand() % questions.size();
+        p.question = questions[idx].question;
+        p.answer = questions[idx].answer;
+        generateOptions(p, questions[idx].answer.toInt(), 0, 30);
+        p.hint = questions[idx].hint;
+        return p;
+    }
+
+    Puzzle generateIdiomPuzzle() {
+        Puzzle p;
+        struct Idiom {
+            QString hint;
+            QString answer;
+            QString options[4];
+        };
+
+        QVector<Idiom> idioms = {
+            {"形容人多", "人山人海", {"人山人海", "车水马龙", "川流不息", "门庭若市"}},
+            {"比喻做事有始有终", "有始有终", {"有始有终", "半途而废", "虎头蛇尾", "善始善终"}},
+            {"形容非常高兴", "兴高采烈", {"兴高采烈", "垂头丧气", "闷闷不乐", "愁眉苦脸"}},
+            {"比喻知己或知音", "知音难觅", {"知音难觅", "志同道合", "莫逆之交", "生死之交"}},
+            {"形容学习刻苦", "悬梁刺股", {"悬梁刺股", "闻鸡起舞", "凿壁偷光", "囊萤映雪"}},
+            {"比喻做事不切实际", "好高骛远", {"好高骛远", "脚踏实地", "实事求是", "稳扎稳打"}},
+            {"形容时间过得快", "光阴似箭", {"光阴似箭", "度日如年", "日月如梭", "白驹过隙"}},
+            {"比喻团结就是力量", "众志成城", {"众志成城", "分崩离析", "各自为政", "孤军奋战"}}
+        };
+
+        int idx = rand() % idioms.size();
+        p.question = QString("根据提示猜成语：%1").arg(idioms[idx].hint);
+        p.answer = idioms[idx].answer;
+        for(int i=0; i<4; i++) p.options[i] = idioms[idx].options[i];
+        p.correctIndex = 0;
+        p.hint = "想想哪个成语最符合描述";
+        return p;
+    }
+
+    Puzzle generateRiddlePuzzle() {
+        Puzzle p;
+        struct Riddle {
+            QString question;
+            QString answer;
+            QString hint;
+        };
+
+        QVector<Riddle> riddles = {
+            {"什么东西早上四条腿，中午两条腿，晚上三条腿？", "人", "想想人生的三个阶段"},
+            {"什么东西打破了却还能用？", "纪录", "体育比赛常说的"},
+            {"什么东西越用越有钱？", "存钱罐", "用来存钱的容器"},
+            {"什么东西你越想抓住它，它就越跑？", "时间", "一去不复返"},
+            {"什么东西有口却不能说话？", "茶壶", "用来泡茶的"},
+            {"什么东西天天来却从不停留？", "明天", "每天都会到来"},
+            {"什么东西没有翅膀却能飞？", "气球", "里面充满空气"},
+            {"什么东西有头有尾却没有身体？", "硬币", "人民币上有"},
+            {"什么东西越洗越干净？", "肥皂", "洗衣服用的"},
+            {"什么东西只升不降？", "年龄", "每个人都会增长"}
+        };
+
+        int idx = rand() % riddles.size();
+        p.question = riddles[idx].question;
+        p.answer = riddles[idx].answer;
+        generateOptions(p, 0, 0, 0);
+        p.hint = riddles[idx].hint;
+        return p;
+    }
+
+    Puzzle generateKnowledgePuzzle() {
+        Puzzle p;
+        struct Knowledge {
+            QString question;
+            QString answer;
+            QString options[4];
+        };
+
+        QVector<Knowledge> questions = {
+            {"中国最长的河流是？", "长江", {"长江", "黄河", "珠江", "黑龙江"}},
+            {"地球绕太阳转一圈需要多久？", "一年", {"一天", "一个月", "一年", "一百年"}},
+            {"水的化学式是？", "H2O", {"H2O", "CO2", "O2", "NaCl"}},
+            {"世界上最大的海洋是？", "太平洋", {"大西洋", "太平洋", "印度洋", "北冰洋"}},
+            {"人类有多少根骨头？", "206", {"200", "206", "210", "216"}},
+            {"一年有几个季节？", "4", {"2", "3", "4", "5"}},
+            {"世界上最高的山峰是？", "珠穆朗玛峰", {"珠穆朗玛峰", "乔戈里峰", "富士山", "泰山"}},
+            {"光的速度大约是每秒多少公里？", "30万公里", {"10万公里", "20万公里", "30万公里", "40万公里"}}
+        };
+
+        int idx = rand() % questions.size();
+        p.question = questions[idx].question;
+        p.answer = questions[idx].answer;
+        for(int i=0; i<4; i++) p.options[i] = questions[idx].options[i];
+        p.correctIndex = 0;
+        p.hint = "这是基本常识哦";
+        return p;
+    }
+
+    Puzzle generateCountingPuzzle() {
+        Puzzle p;
+        int a = rand() % 10 + 1;
+        int b = rand() % 10 + 1;
+        int c = rand() % 10 + 1;
+
+        QString shapes[] = {"圆形", "正方形", "三角形", "长方形", "五角星"};
+        QString shape1 = shapes[rand() % 5];
+        QString shape2 = shapes[rand() % 5];
+        QString shape3 = shapes[rand() % 5];
+
+        p.question = QString("盒子里有%1个%2，%3个%4，%5个%6，总共有多少个图形？")
+                     .arg(a).arg(shape1).arg(b).arg(shape2).arg(c).arg(shape3);
+        p.answer = QString::number(a + b + c);
+        generateOptions(p, a + b + c, 0, 30);
+        p.hint = QString("%1+%2+%3").arg(a).arg(b).arg(c);
+        return p;
+    }
+
+    void generateOptions(Puzzle &p, int correctAnswer, int min, int max) {
+        QVector<int> nums;
+        nums.append(correctAnswer);
+
+        while(nums.size() < 4) {
+            int num = min + rand() % (max - min + 1);
+            if(!nums.contains(num)) {
+                nums.append(num);
+            }
+        }
+
+        for(int i=0; i<4; i++) {
+            int idx = rand() % nums.size();
+            p.options[i] = QString::number(nums[idx]);
+            if(nums[idx] == correctAnswer) p.correctIndex = i;
+            nums.remove(idx);
+        }
+    }
+};
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+    
+    PuzzleGenerator generator;
+    
+    for(int i=0; i<5; i++) {
+        auto puzzle = generator.generateRandomPuzzle();
+        printf("题目%d [%s]: %s\n", i+1, 
+               generator.getTypeName(puzzle.type).toUtf8().constData(),
+               puzzle.question.toUtf8().constData());
+        printf("选项: ");
+        for(int j=0; j<4; j++) {
+            printf("[%d]%s ", j+1, puzzle.options[j].toUtf8().constData());
+        }
+        printf("\n答案: %s\n提示: %s\n\n", 
+               puzzle.answer.toUtf8().constData(),
+               puzzle.hint.toUtf8().constData());
+    }
+    
+    SnakeGame w;
+    w.show();
+    return a.exec();
+}
+
+#include "main.moc"
