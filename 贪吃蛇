@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贪吃蛇游戏</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .game-container {
+            text-align: center;
+        }
+        canvas {
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 5px;
+        }
+        .game-info {
+            margin: 20px 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        .controls {
+            margin-top: 15px;
+        }
+        .instructions {
+            margin-top: 20px;
+            max-width: 500px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .instructions h3 {
+            margin-top: 0;
+        }
+        .quiz-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .quiz-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .quiz-content h2 {
+            color: #3498db;
+        }
+        .quiz-content p {
+            font-size: 18px;
+            margin: 20px 0;
+        }
+        .quiz-content input {
+            width: 80px;
+            padding: 10px;
+            font-size: 18px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .quiz-content .feedback {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        .quiz-content .correct {
+            color: green;
+        }
+        .quiz-content .wrong {
+            color: red;
+        }
+        .timer {
+            color: #e74c3c;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>贪吃蛇游戏</h1>
+    
+    <div class="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        
+        <div class="game-info">
+            <span id="score">分数：0</span>
+            <span id="highScore">最高分：0</span>
+            <span class="timer" id="timer">下次题目：30秒</span>
+        </div>
+        
+        <div class="controls">
+            <button onclick="startGame()">开始游戏</button>
+            <button onclick="pauseGame()">暂停</button>
+            <button onclick="resetGame()">重新开始</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>游戏说明：</h3>
+            <p>使用方向键控制蛇的移动，吃掉红色食物来增长身体和获得分数。</p>
+            <p>每30秒会出现一道益智题目，答对可获得10个糖豆！</p>
+            <p>每吃一个糖豆会使蛇的长度增加2个单位，并获得5分！</p>
+            <p>撞到墙壁或自己的身体游戏结束。</p>
+        </div>
+    </div>
+    
+    <div class="quiz-modal" id="quizModal">
+        <div class="quiz-content">
+            <h2>🧠 益智挑战</h2>
+            <p id="quizQuestion">题目将在这里显示</p>
+            <input type="number" id="quizAnswer" placeholder="答案">
+            <br>
+            <button onclick="submitQuiz()">提交答案</button>
+            <div class="feedback" id="quizFeedback"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 游戏参数
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+        
+        // 蛇的初始状态
+        let snake = [
+            { x: 10, y: 10 },
+            { x: 9, y: 10 },
+            { x: 8, y: 10 }
+        ];
+        
+        // 食物位置
+        let food = { x: 15, y: 10 };
+        
+        // 糖豆数组
+        let candies = [];
+        
+        // 游戏状态
+        let direction = 'right';
+        let nextDirection = 'right';
+        let score = 0;
+        let highScore = localStorage.getItem('snakeHighScore') || 0;
+        let gameSpeed = 10;
+        let gameInterval;
+        let isGameOver = false;
+        let isPaused = false;
+        let isQuizActive = false;
+        
+        // 题目计时器
+        let quizTimer = 30;
+        let quizInterval;
+        
+        // 益智题目列表
+        const quizzes = [
+            { question: "3 + 5 × 2 = ?", answer: 13 },
+            { question: "一个正方形有几条边？", answer: 4 },
+            { question: "一周有几天？", answer: 7 },
+            { question: "5的平方是多少？", answer: 25 },
+            { question: "20 - 8 ÷ 2 = ?", answer: 16 },
+            { question: "三角形有几个角？", answer: 3 },
+            { question: "一年有几个季节？", answer: 4 },
+            { question: "100 ÷ 4 = ?", answer: 25 },
+            { question: "7 × 8 = ?", answer: 56 },
+            { question: "半小时等于多少分钟？", answer: 30 },
+            { question: "圆有几条边？", answer: 0 },
+            { question: "1米等于多少厘米？", answer: 100 },
+            { question: "4 × 9 + 6 = ?", answer: 42 },
+            { question: "一天有几个小时？", answer: 24 },
+            { question: "6 × 7 = ?", answer: 42 }
+        ];
+        
+        // 更新最高分显示
+        document.getElementById('highScore').textContent = `最高分：${highScore}`;
+        
+        // 绘制游戏
+        function draw() {
+            // 清空画布
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制糖豆
+            candies.forEach(candy => {
+                ctx.fillStyle = candy.color;
+                ctx.beginPath();
+                ctx.arc(candy.x * gridSize + gridSize / 2, candy.y * gridSize + gridSize / 2, gridSize / 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // 绘制蛇
+            ctx.fillStyle = '#0f0';
+            snake.forEach((segment, index) => {
+                if (index === 0) {
+                    // 蛇头
+                    ctx.fillStyle = '#0a0';
+                }
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+            });
+            
+            // 绘制食物
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+            
+            // 绘制游戏结束信息
+            if (isGameOver) {
+                ctx.fillStyle = '#fff';
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('游戏结束！', canvas.width / 2, canvas.height / 2 - 20);
+                ctx.font = '16px Arial';
+                ctx.fillText('点击"重新开始"按钮开始新游戏', canvas.width / 2, canvas.height / 2 + 20);
+            }
+            
+            // 绘制暂停信息
+            if (isPaused && !isGameOver) {
+                ctx.fillStyle = '#fff';
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('游戏暂停', canvas.width / 2, canvas.height / 2);
+            }
+        }
+        
+        // 更新游戏状态
+        function update() {
+            if (isGameOver || isPaused || isQuizActive) return;
+            
+            // 更新方向
+            direction = nextDirection;
+            
+            // 移动蛇头
+            const head = { ...snake[0] };
+            switch (direction) {
+                case 'up':
+                    head.y--;
+                    break;
+                case 'down':
+                    head.y++;
+                    break;
+                case 'left':
+                    head.x--;
+                    break;
+                case 'right':
+                    head.x++;
+                    break;
+            }
+            
+            // 检查碰撞
+            // 墙壁碰撞
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                gameOver();
+                return;
+            }
+            
+            // 自身碰撞
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    gameOver();
+                    return;
+                }
+            }
+            
+            // 检查是否吃到糖豆
+            let candiesEaten = 0;
+            candies = candies.filter(candy => {
+                if (head.x === candy.x && head.y === candy.y) {
+                    // 吃到糖豆，增加分数和长度
+                    score += 5;
+                    candiesEaten++;
+                    return false;
+                }
+                return true;
+            });
+            
+            // 每吃一个糖豆，蛇的长度增加2个单位
+            for (let i = 0; i < candiesEaten * 2; i++) {
+                snake.push({ ...snake[snake.length - 1] });
+            }
+            
+            if (candiesEaten > 0) {
+                document.getElementById('score').textContent = `分数：${score}`;
+            }
+            
+            // 检查是否吃到食物
+            if (head.x === food.x && head.y === food.y) {
+                // 增加分数
+                score += 10;
+                document.getElementById('score').textContent = `分数：${score}`;
+                
+                // 更新最高分
+                if (score > highScore) {
+                    highScore = score;
+                    document.getElementById('highScore').textContent = `最高分：${highScore}`;
+                    localStorage.setItem('snakeHighScore', highScore);
+                }
+                
+                // 生成新食物
+                generateFood();
+                
+                // 增加蛇的长度（不删除尾部）
+            } else {
+                // 移动蛇身
+                snake.pop();
+            }
+            
+            // 添加新的蛇头
+            snake.unshift(head);
+        }
+        
+        // 生成食物
+        function generateFood() {
+            let newFood;
+            let isFoodOnSnake;
+            
+            do {
+                isFoodOnSnake = false;
+                newFood = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+                
+                // 检查食物是否在蛇身上
+                for (let segment of snake) {
+                    if (segment.x === newFood.x && segment.y === newFood.y) {
+                        isFoodOnSnake = true;
+                        break;
+                    }
+                }
+            } while (isFoodOnSnake);
+            
+            food = newFood;
+        }
+        
+        // 生成糖豆
+        function generateCandies(count = 10) {
+            const colors = ['#ff6b6b', '#feca57', '#48dbfb', '#1dd1a1', '#5f27cd', '#ff9ff3', '#54a0ff'];
+            
+            for (let i = 0; i < count; i++) {
+                let newCandy;
+                let isCandyOnSnakeOrFood;
+                
+                do {
+                    isCandyOnSnakeOrFood = false;
+                    newCandy = {
+                        x: Math.floor(Math.random() * tileCount),
+                        y: Math.floor(Math.random() * tileCount),
+                        color: colors[Math.floor(Math.random() * colors.length)]
+                    };
+                    
+                    // 检查糖豆是否在蛇身上或食物位置
+                    if (newCandy.x === food.x && newCandy.y === food.y) {
+                        isCandyOnSnakeOrFood = true;
+                        continue;
+                    }
+                    
+                    for (let segment of snake) {
+                        if (segment.x === newCandy.x && segment.y === newCandy.y) {
+                            isCandyOnSnakeOrFood = true;
+                            break;
+                        }
+                    }
+                } while (isCandyOnSnakeOrFood);
+                
+                candies.push(newCandy);
+            }
+        }
+        
+        // 当前题目
+        let currentQuiz;
+        
+        // 显示题目
+        function showQuiz() {
+            if (isGameOver) return;
+            
+            // 随机选择一道题目
+            currentQuiz = quizzes[Math.floor(Math.random() * quizzes.length)];
+            
+            // 更新UI
+            document.getElementById('quizQuestion').textContent = currentQuiz.question;
+            document.getElementById('quizAnswer').value = '';
+            document.getElementById('quizFeedback').textContent = '';
+            document.getElementById('quizModal').style.display = 'flex';
+            
+            // 暂停游戏
+            isQuizActive = true;
+        }
+        
+        // 提交答案
+        function submitQuiz() {
+            const answerInput = document.getElementById('quizAnswer');
+            const userAnswer = parseInt(answerInput.value);
+            const feedback = document.getElementById('quizFeedback');
+            
+            if (isNaN(userAnswer)) {
+                feedback.textContent = '请输入有效数字！';
+                feedback.className = 'feedback wrong';
+                return;
+            }
+            
+            if (userAnswer === currentQuiz.answer) {
+                // 答对了，生成10个糖豆
+                feedback.textContent = '🎉 答对了！获得10个糖豆！';
+                feedback.className = 'feedback correct';
+                generateCandies(10);
+                
+                setTimeout(() => {
+                    document.getElementById('quizModal').style.display = 'none';
+                    isQuizActive = false;
+                    // 重置题目计时器
+                    quizTimer = 30;
+                }, 2000);
+            } else {
+                feedback.textContent = `😢 答错了！正确答案是 ${currentQuiz.answer}`;
+                feedback.className = 'feedback wrong';
+                
+                setTimeout(() => {
+                    document.getElementById('quizModal').style.display = 'none';
+                    isQuizActive = false;
+                    // 重置题目计时器
+                    quizTimer = 30;
+                }, 2000);
+            }
+        }
+        
+        // 游戏结束
+        function gameOver() {
+            isGameOver = true;
+            clearInterval(gameInterval);
+            clearInterval(quizInterval);
+        }
+        
+        // 开始游戏
+        function startGame() {
+            if (!isGameOver && !isPaused) return;
+            
+            if (isGameOver) {
+                // 重置游戏
+                resetGame();
+            }
+            
+            isPaused = false;
+            gameInterval = setInterval(() => {
+                update();
+                draw();
+            }, 1000 / gameSpeed);
+            
+            // 启动题目计时器
+            if (!quizInterval) {
+                startQuizTimer();
+            }
+        }
+        
+        // 启动题目计时器
+        function startQuizTimer() {
+            quizInterval = setInterval(() => {
+                if (!isGameOver && !isPaused && !isQuizActive) {
+                    quizTimer--;
+                    document.getElementById('timer').textContent = `下次题目：${quizTimer}秒`;
+                    
+                    if (quizTimer <= 0) {
+                        showQuiz();
+                    }
+                }
+            }, 1000);
+        }
+        
+        // 暂停游戏
+        function pauseGame() {
+            if (isGameOver) return;
+            
+            isPaused = !isPaused;
+            if (isPaused) {
+                clearInterval(gameInterval);
+                draw();
+            } else {
+                gameInterval = setInterval(() => {
+                    update();
+                    draw();
+                }, 1000 / gameSpeed);
+            }
+        }
+        
+        // 重置游戏
+        function resetGame() {
+            clearInterval(gameInterval);
+            clearInterval(quizInterval);
+            quizInterval = null;
+            
+            // 重置蛇
+            snake = [
+                { x: 10, y: 10 },
+                { x: 9, y: 10 },
+                { x: 8, y: 10 }
+            ];
+            
+            // 重置方向
+            direction = 'right';
+            nextDirection = 'right';
+            
+            // 重置分数
+            score = 0;
+            document.getElementById('score').textContent = `分数：${score}`;
+            
+            // 重置糖豆
+            candies = [];
+            
+            // 重置题目计时器
+            quizTimer = 30;
+            document.getElementById('timer').textContent = `下次题目：${quizTimer}秒`;
+            
+            // 生成新食物
+            generateFood();
+            
+            // 重置游戏状态
+            isGameOver = false;
+            isPaused = false;
+            isQuizActive = false;
+            
+            // 关闭题目弹窗
+            document.getElementById('quizModal').style.display = 'none';
+        }
+        
+        // 处理键盘输入
+        document.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowUp':
+                    if (direction !== 'down') nextDirection = 'up';
+                    break;
+                case 'ArrowDown':
+                    if (direction !== 'up') nextDirection = 'down';
+                    break;
+                case 'ArrowLeft':
+                    if (direction !== 'right') nextDirection = 'left';
+                    break;
+                case 'ArrowRight':
+                    if (direction !== 'left') nextDirection = 'right';
+                    break;
+                case ' ':
+                    // 空格键暂停/继续
+                    pauseGame();
+                    break;
+            }
+        });
+        
+        // 初始化游戏
+        generateFood();
+        draw();
+    </script>
+</body>
+</html>
